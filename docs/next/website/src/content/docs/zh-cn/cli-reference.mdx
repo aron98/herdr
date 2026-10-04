@@ -181,6 +181,33 @@ worktree 是带有 Git 检出来源信息的普通 Herdr 工作区。`worktree c
 
 Git 默认拒绝由其他用户拥有的仓库。如果你已独立验证该仓库,可传入 `--trust-repository`,仅在本次命令中信任解析后的仓库路径。Herdr 不会修改你的 Git 配置。
 
+## 子模块
+
+```bash
+herdr submodule list [--workspace ID | --cwd PATH]
+herdr submodule open PATH [--workspace ID | --cwd PATH] [--focus] [--no-share-skills]
+herdr submodule contexts
+herdr submodule context WORKSPACE_ID [--enable | --disable] [--codex-source PATH] [--claude-source PATH] [--clear-sources]
+```
+
+`open` 的 `PATH` 是相对于父检出目录的已注册子模块路径。请先用 Git 初始化子模块。
+Herdr 会打开工作区并保存父子关系，不会克隆仓库或更新父仓库记录的子模块提交。
+在子模块工作区使用常规 `worktree create` 和 `worktree open`，即可在不同分支工作；
+即使 worktree 位于父目录之外，也会保留父子关系。
+
+除非指定 `--no-share-skills`，Herdr 会把父目录的 `.agents/skills` 链接到子目录的
+`.agents/skills` 和 `.claude/skills`。对 Claude Code，父目录的 `.claude/skills` 优先。
+直接执行 `claude`、`codex` 或使用 `herdr agent start` 均可发现这些技能。
+子目录已有的技能会被保留，冲突会显示在 `submodule contexts` 中。
+链接指向父目录的实时文件，编辑继承的技能会修改父目录中的原文件。
+父目录的指令文件、钩子和代理设置不会自动合并。
+
+增删父目录技能后，运行 `submodule context WORKSPACE_ID` 刷新。
+可重复使用 `--codex-source` 和 `--claude-source` 指定额外来源，相对路径以父检出目录为准。
+未指定的来源列表保持不变；`--clear-sources` 清空两个额外列表。
+`--disable` 只移除 Herdr 拥有的链接，保留用户修改。链接在退出 Herdr 后仍然存在，
+Git 本地排除规则使其不出现在常规源码变更列表中。
+
 ## 标签页
 
 ```bash

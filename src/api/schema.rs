@@ -10,6 +10,7 @@ pub mod plugins;
 pub mod response;
 pub mod server;
 pub mod session;
+pub mod submodules;
 pub mod tabs;
 pub mod workspaces;
 pub mod worktrees;
@@ -24,6 +25,7 @@ pub use plugins::*;
 pub use response::*;
 pub use server::*;
 pub use session::*;
+pub use submodules::*;
 pub use tabs::*;
 pub use workspaces::*;
 pub use worktrees::*;
@@ -93,6 +95,14 @@ pub enum Method {
     WorkspaceReportMetadata(WorkspaceReportMetadataParams),
     #[serde(rename = "workspace.close")]
     WorkspaceClose(WorkspaceCloseParams),
+    #[serde(rename = "submodule.list")]
+    SubmoduleList(SubmoduleListParams),
+    #[serde(rename = "submodule.open")]
+    SubmoduleOpen(SubmoduleOpenParams),
+    #[serde(rename = "submodule.contexts")]
+    SubmoduleContexts(EmptyParams),
+    #[serde(rename = "submodule.context.refresh")]
+    SubmoduleContextRefresh(SubmoduleContextParams),
     #[serde(rename = "worktree.list")]
     WorktreeList(WorktreeListParams),
     #[serde(rename = "worktree.create")]

@@ -313,12 +313,26 @@ impl ClientShellState {
         let Some(entry) = open.entries.get(index) else {
             return;
         };
+        if !entry.initialized {
+            open.error = Some("Initialize this submodule with Git before opening it.".into());
+            outcome.repaint = true;
+            return;
+        }
+        let submodules = open.submodules;
         let workspace_id = open.source_workspace_id.clone();
         let path = entry.path.clone();
         open.selected = index;
         open.opening = true;
         open.error = None;
-        if !self.push_endpoint_method_with_kind(
+        let method = if submodules {
+            crate::api::schema::Method::SubmoduleOpen(crate::api::schema::SubmoduleOpenParams {
+                workspace_id: Some(workspace_id),
+                cwd: None,
+                path,
+                focus: true,
+                share_skills: true,
+            })
+        } else {
             crate::api::schema::Method::WorktreeOpen(crate::api::schema::WorktreeOpenParams {
                 workspace_id: Some(workspace_id),
                 cwd: None,
@@ -327,8 +341,15 @@ impl ClientShellState {
                 label: None,
                 focus: true,
                 trust_repository: false,
-            }),
-            PendingEndpointKind::WorktreeOpen,
+            })
+        };
+        if !self.push_endpoint_method_with_kind(
+            method,
+            if submodules {
+                PendingEndpointKind::SubmoduleOpen
+            } else {
+                PendingEndpointKind::WorktreeOpen
+            },
             outcome,
         ) {
             if let Some(ClientShellOverlay::WorktreeOpen(open)) = self.overlay.as_mut() {
@@ -410,6 +431,7 @@ impl ClientShellState {
                     .map(|entry| {
                         let label = entry.branch.clone().unwrap_or_else(|| entry.label.clone());
                         ClientWorktreeOpenEntry {
+                            initialized: true,
                             path: entry.path,
                             branch: entry.branch,
                             is_linked_worktree: entry.is_linked_worktree,
@@ -424,6 +446,7 @@ impl ClientShellState {
                 } else {
                     self.overlay = Some(ClientShellOverlay::WorktreeOpen(
                         ClientWorktreeOpenOverlay {
+                            submodules: false,
                             source_workspace_id: workspace_id,
                             entries,
                             selected: 0,
@@ -526,7 +549,10 @@ impl ClientShellState {
                 true
             }
             (
-                PendingEndpointKind::Generic
+                PendingEndpointKind::PrepareSubmoduleOpen { .. }
+                | PendingEndpointKind::SubmoduleOpen
+                | PendingEndpointKind::SubmoduleContextRefresh
+                | PendingEndpointKind::Generic
                 | PendingEndpointKind::ProductAnnouncementDismiss { .. }
                 | PendingEndpointKind::ReleaseNotesDismiss
                 | PendingEndpointKind::PopupCommand

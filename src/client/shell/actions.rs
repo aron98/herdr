@@ -466,6 +466,9 @@ impl ClientShellState {
     }
 
     pub(crate) fn cancel_endpoint_request(&mut self, request_id: &str) -> bool {
+        if self.cancel_submodule_metadata(request_id) {
+            return true;
+        }
         let Some(pending) = self.pending_requests.get(request_id) else {
             return false;
         };
@@ -492,6 +495,12 @@ impl ClientShellState {
         request_id: &str,
         result: Result<crate::api::schema::ResponseResult, ClientShellEndpointError>,
     ) -> (bool, Vec<ClientShellAction>) {
+        if self.is_submodule_metadata_request(request_id) {
+            return (
+                self.complete_submodule_metadata(boot_id, request_id, result),
+                Vec::new(),
+            );
+        }
         let Some(pending) = self.pending_requests.remove(request_id) else {
             return (false, Vec::new());
         };
@@ -819,6 +828,16 @@ impl ClientShellState {
             kind @ (PendingEndpointKind::IntegrationList
             | PendingEndpointKind::IntegrationInstall) => {
                 return self.handle_settings_endpoint_result(kind, result);
+            }
+            kind @ (PendingEndpointKind::PrepareSubmoduleOpen { .. }
+            | PendingEndpointKind::SubmoduleOpen) => {
+                let mut outcome = ClientShellInput::default();
+                let repaint = self.handle_submodule_result(kind, result, &mut outcome);
+                return (repaint, outcome.actions);
+            }
+            PendingEndpointKind::SubmoduleContextRefresh => {
+                // Correlated context replies were handled above; a cleared owner is stale.
+                return (false, Vec::new());
             }
             kind => {
                 let mut outcome = ClientShellInput::default();

@@ -627,6 +627,7 @@ impl App {
         };
         app.configure_tab_bar_status(&config.ui.tab_bar_right, &config.ui.tab_bar_right_separator);
         app.configure_window_title(&config.ui.window_title);
+        app.refresh_restored_submodules();
         app
     }
 
@@ -682,6 +683,7 @@ impl App {
                 .get(idx)
                 .and_then(|ws| ws.focused_pane_id().map(|pane_id| (idx, pane_id)))
         });
+        app.refresh_restored_submodules();
         Ok(app)
     }
 

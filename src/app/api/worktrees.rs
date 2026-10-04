@@ -38,6 +38,8 @@ fn absolute_user_path(path: &str) -> Result<PathBuf, ApiFailure> {
 }
 
 struct WorktreeSource {
+    prepared_submodule_source: Option<crate::submodule::Association>,
+    submodule_context: Option<crate::submodule::Association>,
     workspace_idx: Option<usize>,
     source_checkout_path: PathBuf,
     source_repo_root: PathBuf,
@@ -201,6 +203,13 @@ impl App {
                 ));
             }
             let source = WorktreeSource {
+                prepared_submodule_source: None,
+                submodule_context: self.state.workspaces.iter().find_map(|ws| {
+                    ws.submodule_context
+                        .as_ref()
+                        .filter(|c| c.checkout_path == space.repo_root)
+                        .cloned()
+                }),
                 workspace_idx: self.find_parent_workspace_for_space(&space),
                 source_checkout_path: space.repo_root.clone(),
                 source_repo_root: space.repo_root,
@@ -239,6 +248,8 @@ impl App {
                 ));
             }
             return Ok(WorktreeSource {
+                prepared_submodule_source: None,
+                submodule_context: ws.submodule_context.clone(),
                 workspace_idx: Some(ws_idx),
                 source_checkout_path: membership.checkout_path.clone(),
                 source_repo_root: membership.repo_root.clone(),
@@ -265,6 +276,8 @@ impl App {
             ));
         }
         Ok(WorktreeSource {
+            prepared_submodule_source: None,
+            submodule_context: ws.submodule_context.clone(),
             workspace_idx: Some(ws_idx),
             source_checkout_path: space.repo_root.clone(),
             source_repo_root: space.repo_root,
@@ -287,6 +300,10 @@ impl App {
                 .create_workspace_with_options(source.source_checkout_path.clone(), false)
                 .map_err(|err| ApiFailure::new("worktree_open_failed", err.to_string()))?;
             source.workspace_idx = Some(ws_idx);
+            if let Some(mut context) = source.prepared_submodule_source.clone() {
+                context.checkout_path = source.source_checkout_path.clone();
+                self.state.workspaces[ws_idx].submodule_context = Some(context);
+            }
             created_parent = true;
         }
         if let Some(ws_idx) = source.workspace_idx {
@@ -326,6 +343,10 @@ impl App {
         target_is_linked_worktree: bool,
         emit_update: bool,
     ) {
+        if let Some(mut context) = source.submodule_context.clone() {
+            context.checkout_path = target_path.clone();
+            self.state.workspaces[target_ws_idx].submodule_context = Some(context);
+        }
         let membership = worktree_membership(source, target_path, target_is_linked_worktree);
         self.set_worktree_membership(target_ws_idx, membership, emit_update);
     }
@@ -1030,6 +1051,10 @@ mod tests {
         app.handle_api_worktree_add_finished(WorktreeAddResult {
             path: checkout.clone(),
             api_request: Some(ApiWorktreeAddRequest {
+                _submodule_write_permit: None,
+                prepared_submodule_source: None,
+                _submodule_permit: None,
+                submodule_context: None,
                 id: "req".into(),
                 operation_id: 9,
                 checkout_key,

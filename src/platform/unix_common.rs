@@ -476,6 +476,14 @@ pub(crate) fn set_default_plugin_pane_pwd(env: &mut Vec<(String, String)>, cwd: 
     }
 }
 
+pub(crate) fn create_directory_link(target: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+pub(crate) fn remove_directory_link(link: &Path) -> std::io::Result<()> {
+    std::fs::remove_file(link)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

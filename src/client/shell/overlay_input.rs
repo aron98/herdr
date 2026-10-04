@@ -993,6 +993,11 @@ impl ClientShellState {
         close_group: Option<bool>,
         outcome: &mut ClientShellInput,
     ) {
+        let close_group = if self.is_submodule_parent(&workspace_id) {
+            Some(false)
+        } else {
+            close_group
+        };
         if self.config.confirm_close {
             self.open_close_confirmation(workspace_id, None, close_group);
             return;

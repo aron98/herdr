@@ -754,7 +754,10 @@ fn mobile_items(
         palette,
     ));
     for endpoint in super::aggregate_navigation::cached_endpoint_snapshots(endpoints) {
-        for entry in super::render::workspace_entries(endpoint.snapshot, &HashSet::new()) {
+        for entry in endpoint
+            .hierarchy
+            .entries(endpoint.snapshot, &HashSet::new())
+        {
             let Some(workspace) = endpoint.snapshot.workspaces.get(entry.index) else {
                 continue;
             };
@@ -787,7 +790,7 @@ fn mobile_items(
             } else {
                 ""
             };
-            let name = if entry.indented && !workspace.custom_label {
+            let name = if entry.indented && !entry.submodule && !workspace.custom_label {
                 workspace
                     .branch
                     .as_deref()
@@ -843,7 +846,11 @@ fn mobile_items(
                         Span::styled(" ", Style::default().bg(background)),
                         Span::styled(
                             crate::ui::truncate_end(
-                                &format!("{} · {name}", endpoint.label),
+                                &format!(
+                                    "{} · {}{name}",
+                                    endpoint.label,
+                                    if entry.submodule { "◇ " } else { "" }
+                                ),
                                 usize::from(content_width.saturating_sub(if entry.indented {
                                     8
                                 } else {

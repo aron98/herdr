@@ -185,6 +185,37 @@ Worktrees are normal Herdr workspaces with Git checkout provenance. `worktree cr
 
 Git rejects repositories owned by another user by default. If you have independently verified the repository, pass `--trust-repository` to trust its resolved path for that command only. Herdr does not change your Git configuration.
 
+## Submodules
+
+```bash
+herdr submodule list [--workspace ID | --cwd PATH]
+herdr submodule open PATH [--workspace ID | --cwd PATH] [--focus] [--no-share-skills]
+herdr submodule contexts
+herdr submodule context WORKSPACE_ID [--enable | --disable] [--codex-source PATH] [--claude-source PATH] [--clear-sources]
+```
+
+`PATH` for `open` is the registered submodule path relative to its parent checkout.
+Initialize the submodule with Git first. Opening creates or focuses its workspace
+and remembers its parent; it does not clone repositories or update Git's recorded
+submodule commit. Use normal `worktree create` and `worktree open` commands with
+the submodule workspace to work on separate branches. Those workspaces retain
+the parent association even when the worktree is outside the parent directory.
+
+Skill sharing is enabled when opening unless `--no-share-skills` is supplied.
+Herdr links parent `.agents/skills` entries into the child's `.agents/skills` and
+`.claude/skills`; parent `.claude/skills` entries take precedence for Claude Code.
+Both direct `claude`/`codex` commands and `herdr agent start` discover these files.
+Existing child skills are preserved and conflicts appear in `submodule contexts`.
+The links point to live parent files: editing an inherited skill changes the
+parent's copy. Parent instructions, hooks, and agent settings are not merged.
+
+Run `submodule context WORKSPACE_ID` to refresh after adding or removing parent
+skills. Repeat `--codex-source` or `--claude-source` for extra source directories;
+relative paths resolve from the parent checkout. Unspecified source lists remain
+unchanged; `--clear-sources` clears both extra lists. `--disable` removes only
+Herdr-owned links, preserving user changes. Prepared links persist after closing
+Herdr, and Git-local exclusions keep them out of normal source changes.
+
 ## Tabs
 
 ```bash

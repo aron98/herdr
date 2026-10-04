@@ -36,6 +36,7 @@ mod server;
 mod server_not_running;
 mod spec;
 mod status;
+mod submodule;
 mod tab;
 mod target;
 mod workspace;
@@ -122,6 +123,7 @@ pub fn maybe_run(args: &[String]) -> std::io::Result<CommandOutcome> {
         "machine" => machine::run_machine_command(&args[2..])?,
         "workspace" => workspace::run_workspace_command(&args[2..])?,
         "worktree" => worktree::run_worktree_command(&args[2..])?,
+        "submodule" => submodule::run_submodule_command(&args[2..])?,
         "tab" => tab::run_tab_command(&args[2..])?,
         "notification" => notification::run_notification_command(&args[2..])?,
         "agent" => agent::run_agent_command(&args[2..])?,

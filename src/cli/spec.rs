@@ -39,6 +39,7 @@ pub(super) fn command() -> Command {
         .subcommand(api_command())
         .subcommand(workspace_command())
         .subcommand(worktree_command())
+        .subcommand(submodule_command())
         .subcommand(tab_command())
         .subcommand(notification_command())
         .subcommand(agent_command())
@@ -264,6 +265,41 @@ fn worktree_command() -> Command {
                 .arg(option("workspace", "ID"))
                 .arg(flag("force"))
                 .arg(flag("trust-repository")),
+        )
+}
+
+pub(super) fn submodule_command() -> Command {
+    let source = |command: Command| {
+        command
+            .arg(option("workspace", "ID").conflicts_with("cwd"))
+            .arg(path_option("cwd", "PATH"))
+    };
+    Command::new("submodule")
+        .about("Open submodules and share parent repository skills")
+        .subcommand_required(true)
+        .subcommand(source(
+            Command::new("list").about("List registered submodules"),
+        ))
+        .subcommand(source(
+            Command::new("open")
+                .about("Open an initialized submodule with parent skills")
+                .arg(required("path", "PATH"))
+                .arg(flag("focus").conflicts_with("no-focus"))
+                .arg(flag("no-focus"))
+                .arg(flag("no-share-skills")),
+        ))
+        .subcommand(
+            Command::new("contexts").about("List parent associations and skill sharing status"),
+        )
+        .subcommand(
+            Command::new("context")
+                .about("Refresh, enable or disable a workspace's parent skills")
+                .arg(required("workspace_id", "WORKSPACE_ID"))
+                .arg(flag("enable").conflicts_with("disable"))
+                .arg(flag("disable"))
+                .arg(repeatable_option("codex-source", "PATH"))
+                .arg(repeatable_option("claude-source", "PATH"))
+                .arg(flag("clear-sources").conflicts_with_all(["codex-source", "claude-source"])),
         )
 }
 
@@ -1233,6 +1269,57 @@ mod tests {
                 !has_option(worktree_command, "json"),
                 "herdr worktree {subcommand} should not advertise --json"
             );
+        }
+    }
+
+    #[test]
+    fn submodule_cli_accepts_parent_and_context_options() {
+        for args in [
+            vec!["herdr", "submodule", "list", "--cwd", "/pipeline"],
+            vec!["herdr", "submodule", "open", "rebuild", "--workspace", "w1"],
+            vec!["herdr", "submodule", "contexts"],
+            vec!["herdr", "submodule", "context", "w2", "--disable"],
+            vec![
+                "herdr",
+                "submodule",
+                "context",
+                "w2",
+                "--enable",
+                "--codex-source",
+                "skills",
+            ],
+        ] {
+            assert!(
+                super::command().try_get_matches_from(args.clone()).is_ok(),
+                "{args:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn submodule_cli_rejects_ambiguous_sources_and_settings() {
+        for args in [
+            vec![
+                "herdr",
+                "submodule",
+                "list",
+                "--cwd",
+                "/pipeline",
+                "--workspace",
+                "w1",
+            ],
+            vec!["herdr", "submodule", "open"],
+            vec![
+                "herdr",
+                "submodule",
+                "context",
+                "w2",
+                "--enable",
+                "--disable",
+            ],
+            vec!["herdr", "submodule", "context", "w2", "--codex-source"],
+        ] {
+            assert!(super::command().try_get_matches_from(args).is_err());
         }
     }
 

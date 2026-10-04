@@ -108,6 +108,28 @@ async fn metadata_only_shell_is_isolated_until_surface_activation() {
             client_id,
             boot_id: boot_id.clone(),
             request: Box::new(api::schema::Request {
+                id: "inactive-submodule-metadata".into(),
+                method: api::schema::Method::SubmoduleContexts(api::schema::EmptyParams {}),
+            }),
+        })
+    );
+    let ServerMessage::ClientShellEndpointResponseChunk { data, .. } =
+        read_server_message(control_rx.recv().expect("submodule metadata response"))
+    else {
+        panic!("expected endpoint metadata response");
+    };
+    let response: api::schema::SuccessResponse = serde_json::from_slice(&data).unwrap();
+    assert!(
+        matches!(response.result, api::schema::ResponseResult::SubmoduleContexts { contexts } if contexts.is_empty())
+    );
+    assert_eq!(server.foreground_client_id, None);
+    assert_eq!(server.effective_size, original_size);
+    assert!(!server.clients[&client_id].shell_endpoint_command_in_flight);
+    assert!(
+        !server.handle_server_event(ServerEvent::ClientShellEndpointRequest {
+            client_id,
+            boot_id: boot_id.clone(),
+            request: Box::new(api::schema::Request {
                 id: "inactive-mutation".into(),
                 method: api::schema::Method::WorkspaceFocus(api::schema::WorkspaceTarget {
                     workspace_id,

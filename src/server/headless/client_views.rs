@@ -236,6 +236,7 @@ impl HeadlessServer {
                 | Method::TabCreate(_)
                 | Method::WorkspaceClose(_)
                 | Method::WorkspaceCreate(_)
+                | Method::SubmoduleOpen(_)
                 | Method::WorktreeCreate(_)
                 | Method::WorktreeOpen(_)
                 | Method::WorktreeRemove(_)
@@ -277,6 +278,7 @@ impl HeadlessServer {
                 | Method::WorkspaceMove(_)
                 | Method::WorkspaceMoveBlock(_)
                 | Method::WorkspaceRename(_)
+                | Method::SubmoduleOpen(_)
                 | Method::WorktreeCreate(_)
                 | Method::WorktreeOpen(_)
                 | Method::WorktreeRemove(_)
@@ -305,14 +307,22 @@ impl HeadlessServer {
                 | Method::WorkspaceClose(_)
                 | Method::WorkspaceCreate(_)
                 | Method::WorkspaceFocus(_)
+                | Method::SubmoduleOpen(_)
                 | Method::WorktreeCreate(_)
                 | Method::WorktreeOpen(_)
                 | Method::WorktreeRemove(_)
         )
     }
 
-    pub(super) fn deferred_endpoint_navigation_tab_id(response: &[u8]) -> Option<String> {
+    pub(super) fn deferred_endpoint_navigation_tab_id(&self, response: &[u8]) -> Option<String> {
         let response = serde_json::from_slice::<serde_json::Value>(response).ok()?;
+        if response.pointer("/result/type")?.as_str()? == "submodule_opened" {
+            let workspace_id = response.pointer("/result/workspace_id")?.as_str()?;
+            let index = self.app.parse_workspace_id(workspace_id)?;
+            return self
+                .app
+                .public_tab_id(index, self.app.state.workspaces[index].active_tab_index());
+        }
         if !matches!(
             response.pointer("/result/type")?.as_str()?,
             "worktree_created" | "worktree_opened"

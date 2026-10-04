@@ -543,7 +543,9 @@ impl ClientShellState {
         let collapsed_groups = self
             .collapsed_groups_for_endpoint(&self.active_endpoint_id)
             .unwrap_or(&empty_collapsed_groups);
-        let entries = render::workspace_entries(snapshot, collapsed_groups);
+        let entries = self
+            .hierarchy_for_endpoint(&self.active_endpoint_id)
+            .entries(snapshot, collapsed_groups);
         let last_hit = self
             .hits
             .workspaces

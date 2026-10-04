@@ -129,6 +129,35 @@ impl App {
                 return;
             }
         };
+        let submodule_write_permit = if source.submodule_context.is_some() {
+            match crate::submodule::preparation_slot() {
+                Ok(permit) => Some(permit),
+                Err(error) => {
+                    Self::send_api_response(respond_to, encode_error(id, "submodule_busy", error));
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+        let submodule_permit = if source.submodule_context.is_some() {
+            match self.worktree_read_slots.clone().try_acquire_owned() {
+                Ok(permit) => Some(permit),
+                Err(_) => {
+                    Self::send_api_response(
+                        respond_to,
+                        encode_error(
+                            id,
+                            "submodule_busy",
+                            "Too many repository operations are pending; retry shortly",
+                        ),
+                    );
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         let checkout_path = match params.path {
             Some(path) => match absolute_user_path(&path) {
                 Ok(path) => path,
@@ -176,7 +205,11 @@ impl App {
                 .find(|ws| &ws.id == workspace_id)
                 .and_then(|ws| ws.worktree_space().cloned())
         });
-        let api_request = ApiWorktreeAddRequest {
+        let mut api_request = ApiWorktreeAddRequest {
+            _submodule_write_permit: submodule_write_permit,
+            prepared_submodule_source: None,
+            _submodule_permit: submodule_permit,
+            submodule_context: source.submodule_context,
             id,
             operation_id,
             checkout_key,
@@ -208,6 +241,14 @@ impl App {
                     params.trust_repository,
                 )
             });
+            if result.is_ok() {
+                if let Some(context) = api_request.submodule_context.as_mut() {
+                    context.prepare();
+                    api_request.prepared_submodule_source = Some(context.clone());
+                    context.checkout_path = path.clone();
+                    context.prepare();
+                }
+            }
             let _ = event_tx.blocking_send(AppEvent::WorktreeAddFinished(Box::new(
                 crate::events::WorktreeAddResult {
                     path,
@@ -404,6 +445,8 @@ impl App {
 
         let source_workspace_idx = self.api_create_source_workspace_idx(&api);
         let mut source = WorktreeSource {
+            prepared_submodule_source: api.prepared_submodule_source,
+            submodule_context: api.submodule_context,
             workspace_idx: source_workspace_idx,
             source_checkout_path: api.source_checkout_path,
             source_repo_root: api.source_repo_root,

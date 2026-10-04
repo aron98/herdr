@@ -322,7 +322,7 @@ fn print_worktree_help() {
     eprintln!("  herdr worktree remove --workspace ID [--force] [--trust-repository]");
 }
 
-fn normalize_path_arg(value: &str) -> std::io::Result<String> {
+pub(super) fn normalize_path_arg(value: &str) -> std::io::Result<String> {
     if super::target::is_remote() {
         if super::target::remote_path_is_absolute(value) || value == "~" || value.starts_with("~/")
         {
@@ -330,7 +330,7 @@ fn normalize_path_arg(value: &str) -> std::io::Result<String> {
         }
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "remote worktree paths must be absolute or start with ~/",
+            "remote repository paths must be absolute or start with ~/",
         ));
     }
     let path = crate::worktree::expand_tilde_path(value);

@@ -283,7 +283,10 @@ pub(super) fn render_expanded(
             let collapsed_groups = collapsed_groups_for_endpoint(state, &endpoint.endpoint_id)
                 .unwrap_or(&empty_collapsed_groups);
             rows.extend(
-                super::sidebar::workspace_entries(snapshot, collapsed_groups)
+                endpoint
+                    .submodules
+                    .hierarchy
+                    .entries(snapshot, collapsed_groups)
                     .into_iter()
                     .map(|entry| Row::Workspace {
                         endpoint: endpoint_index,
@@ -317,12 +320,12 @@ pub(super) fn render_expanded(
                         Some(
                             super::sidebar::workspace_rows(
                                 workspace,
-                                super::sidebar::displayed_workspace_status(
+                                endpoint.submodules.hierarchy.displayed_status(
                                     snapshot,
-                                    workspace,
+                                    entry.index,
                                     collapsed_groups,
                                 ),
-                                entry.indented,
+                                entry.indented && !entry.submodule,
                                 &config.spaces,
                             )
                             .len()
@@ -442,15 +445,15 @@ pub(super) fn render_expanded(
                 };
                 let collapsed_groups = collapsed_groups_for_endpoint(state, &endpoint.endpoint_id)
                     .unwrap_or(&empty_collapsed_groups);
-                let status = super::sidebar::displayed_workspace_status(
+                let status = endpoint.submodules.hierarchy.displayed_status(
                     snapshot,
-                    workspace,
+                    entry.index,
                     collapsed_groups,
                 );
                 let tokens = super::sidebar::workspace_rows(
                     workspace,
                     status,
-                    entry.indented,
+                    entry.indented && !entry.submodule,
                     &config.spaces,
                 );
                 let height = (tokens.len().max(1).min(u16::MAX as usize) as u16).min(body.height);
@@ -494,6 +497,7 @@ pub(super) fn render_expanded(
                     rect,
                     snapshot,
                     entry.index,
+                    Some(&endpoint.submodules.hierarchy),
                     collapsed_groups,
                     palette,
                 );

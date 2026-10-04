@@ -434,6 +434,7 @@ pub(super) struct ClientWorktreeCreateOverlay {
 
 #[derive(Debug, Clone)]
 pub(super) struct ClientWorktreeOpenEntry {
+    pub(super) initialized: bool,
     pub(super) path: String,
     pub(super) branch: Option<String>,
     pub(super) is_linked_worktree: bool,
@@ -444,7 +445,9 @@ pub(super) struct ClientWorktreeOpenEntry {
 
 impl ClientWorktreeOpenEntry {
     pub(super) fn status_label(&self) -> &'static str {
-        if self.open_workspace_id.is_some() {
+        if !self.initialized {
+            "initialization required"
+        } else if self.open_workspace_id.is_some() {
             "open"
         } else if self.branch.is_some() {
             ""
@@ -472,6 +475,7 @@ impl ClientWorktreeOpenEntry {
 
 #[derive(Debug)]
 pub(super) struct ClientWorktreeOpenOverlay {
+    pub(super) submodules: bool,
     pub(super) source_workspace_id: String,
     pub(super) entries: Vec<ClientWorktreeOpenEntry>,
     pub(super) selected: usize,
@@ -515,6 +519,9 @@ pub(super) enum ClientContextMenuAction {
     NewWorktree,
     OpenWorktree,
     RemoveWorktree,
+    OpenSubmodule,
+    RefreshSubmoduleContext,
+    ToggleSubmoduleContext,
     ToggleGroup,
     NewTab,
     RenamePane,
@@ -532,6 +539,10 @@ pub(super) enum ClientContextMenuTarget {
     Workspace {
         workspace_id: String,
         is_git: bool,
+        submodule_available: bool,
+        context_sharing: Option<bool>,
+        context_status: Option<String>,
+        relationship_group: Option<String>,
         is_linked_worktree: bool,
         has_worktree_children: bool,
         close_group: bool,
@@ -627,6 +638,11 @@ pub(super) enum PendingEndpointKind {
     ReloadConfig,
     IntegrationList,
     IntegrationInstall,
+    PrepareSubmoduleOpen {
+        workspace_id: String,
+    },
+    SubmoduleOpen,
+    SubmoduleContextRefresh,
     PrepareWorktreeCreate {
         workspace_id: String,
     },
@@ -975,8 +991,10 @@ pub(super) fn release_notes_state(
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(super) struct WorkspaceEntry {
+    pub(super) depth: usize,
+    pub(super) submodule: bool,
     pub(super) index: usize,
     pub(super) indented: bool,
     pub(super) last_child: bool,
@@ -1176,13 +1194,15 @@ impl ClientShellState {
     ) -> Vec<WorkspaceEntry> {
         let empty_collapsed_groups = HashSet::new();
         if self.mobile_layout_active() {
-            render::workspace_entries(snapshot, &empty_collapsed_groups)
+            self.hierarchy_for_endpoint(&self.active_endpoint_id)
+                .entries(snapshot, &empty_collapsed_groups)
         } else {
-            render::workspace_entries(
-                snapshot,
-                self.collapsed_groups_for_endpoint(&self.active_endpoint_id)
-                    .unwrap_or(&empty_collapsed_groups),
-            )
+            self.hierarchy_for_endpoint(&self.active_endpoint_id)
+                .entries(
+                    snapshot,
+                    self.collapsed_groups_for_endpoint(&self.active_endpoint_id)
+                        .unwrap_or(&empty_collapsed_groups),
+                )
         }
     }
 

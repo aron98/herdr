@@ -62,6 +62,19 @@ pub enum ResponseResult {
     WorkspaceList {
         workspaces: Vec<WorkspaceInfo>,
     },
+    SubmoduleList {
+        parent_path: String,
+        submodules: Vec<super::submodules::SubmoduleInfo>,
+    },
+    SubmoduleOpened {
+        workspace_id: String,
+    },
+    SubmoduleContexts {
+        contexts: Vec<super::submodules::SubmoduleContextInfo>,
+    },
+    SubmoduleContext {
+        context: super::submodules::SubmoduleContextInfo,
+    },
     WorktreeList {
         source: WorktreeSourceInfo,
         worktrees: Vec<WorktreeInfo>,

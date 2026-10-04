@@ -168,10 +168,15 @@ pub(crate) fn render_context_menu(
     palette: &Palette,
 ) -> Option<OverlayRender> {
     let items = menu.items();
+    let context_status = match &menu.target {
+        ClientContextMenuTarget::Workspace { context_status, .. } => context_status.as_deref(),
+        _ => None,
+    };
     let screen = buffer.area;
     let max_item_width = items
         .iter()
         .map(|item| display_width(item.label))
+        .chain(context_status.map(display_width))
         .max()
         .unwrap_or(0);
     let width = max_item_width
@@ -179,7 +184,7 @@ pub(crate) fn render_context_menu(
         .max(14)
         .min(screen.width.max(1));
     let height = (items.len() as u16)
-        .saturating_add(2)
+        .saturating_add(2 + u16::from(context_status.is_some()))
         .min(screen.height.max(1));
     let x = menu
         .x
@@ -210,6 +215,21 @@ pub(crate) fn render_context_menu(
         buffer.set_style(row, style);
         put_text(buffer, row.x, row.y, row.width, item.label, style);
         rows.push((row, index));
+    }
+    if let Some(status) = context_status {
+        let y = inner
+            .y
+            .saturating_add(u16::try_from(items.len()).unwrap_or(u16::MAX));
+        if y < inner.bottom() {
+            put_text(
+                buffer,
+                inner.x,
+                y,
+                inner.width,
+                status,
+                Style::default().fg(palette.overlay0).bg(palette.panel_bg),
+            );
+        }
     }
     Some(OverlayRender {
         area: rect,
