@@ -3113,6 +3113,17 @@ impl Drop for InputSourceRestore {
     }
 }
 
+pub(crate) fn create_directory_link(
+    target: &std::path::Path,
+    link: &std::path::Path,
+) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_dir(target, link)
+}
+
+pub(crate) fn remove_directory_link(link: &std::path::Path) -> std::io::Result<()> {
+    std::fs::remove_dir(link)
+}
+
 #[cfg(test)]
 mod tests {
     use std::{

@@ -11,6 +11,8 @@ use super::{absolute_user_path, find_worktree_entry, ApiFailure, WorktreeSource}
 // Capture only source provenance. Filesystem discovery and Git run on the worker;
 // workspace indices and the target's open state are resolved again on completion.
 struct SourceInput {
+    known_submodule_contexts: Vec<crate::submodule::Association>,
+    submodule_context: Option<crate::submodule::Association>,
     workspace_id: Option<String>,
     membership: Option<WorktreeSpaceMembership>,
     git_space: Option<GitSpaceMetadata>,
@@ -34,6 +36,8 @@ impl SourceInput {
                 membership.checkout_path
             };
             WorktreeSource {
+                prepared_submodule_source: None,
+                submodule_context: self.submodule_context.clone(),
                 workspace_idx: None,
                 source_checkout_path,
                 source_repo_root: membership.repo_root,
@@ -58,13 +62,20 @@ impl SourceInput {
                         },
                     )
                 })?;
+            self.submodule_context = self.submodule_context.or_else(|| {
+                self.known_submodule_contexts
+                    .into_iter()
+                    .find(|context| context.checkout_path == space.repo_root)
+            });
             if space.is_linked_worktree {
                 if !allow_linked {
                     return Err(linked_source_error());
                 }
                 self.workspace_id = None;
             }
-            worktree_source_from_space(space, allow_linked, trust_repository)
+            let mut source = worktree_source_from_space(space, allow_linked, trust_repository);
+            source.submodule_context = self.submodule_context;
+            source
         };
         Ok((self.workspace_id, source))
     }
@@ -91,6 +102,18 @@ impl App {
         }
         if let Some(cwd) = cwd {
             return Ok(SourceInput {
+                known_submodule_contexts: self
+                    .state
+                    .workspaces
+                    .iter()
+                    .filter_map(|ws| ws.submodule_context.clone())
+                    .collect(),
+                submodule_context: self.state.workspaces.iter().find_map(|ws| {
+                    ws.submodule_context
+                        .as_ref()
+                        .filter(|c| c.checkout_path == std::path::Path::new(cwd))
+                        .cloned()
+                }),
                 workspace_id: None,
                 membership: None,
                 git_space: None,
@@ -122,6 +145,8 @@ impl App {
         };
         let ws = &self.state.workspaces[ws_idx];
         Ok(SourceInput {
+            known_submodule_contexts: Vec::new(),
+            submodule_context: ws.submodule_context.clone(),
             workspace_id: Some(ws.id.clone()),
             membership: ws.worktree_space().cloned(),
             git_space: ws.git_space().cloned(),
@@ -171,6 +196,24 @@ impl App {
                 return;
             }
         };
+        let submodule_write_permit = if (input.submodule_context.is_some()
+            || !input.known_submodule_contexts.is_empty())
+            && matches!(&request.method, Method::WorktreeOpen(_))
+        {
+            match crate::submodule::preparation_slot() {
+                Ok(permit) => Some(permit),
+                Err(error) => {
+                    if let Err(error) =
+                        respond_to.send(encode_error(request.id, "submodule_busy", error))
+                    {
+                        tracing::debug!(%error, "worktree response receiver closed");
+                    }
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         let Ok(permit) = self.worktree_read_slots.clone().try_acquire_owned() else {
             let _ = respond_to.send(encode_error(
                 request.id,
@@ -203,7 +246,21 @@ impl App {
                                 params.branch.clone(),
                             )?];
                         }
+                        let mut submodule_context = source.submodule_context;
+                        let mut prepared_submodule_source = None;
+                        if matches!(&request.method, Method::WorktreeOpen(_)) {
+                            if let (Some(context), Some(entry)) =
+                                (submodule_context.as_mut(), entries.first())
+                            {
+                                context.prepare();
+                                prepared_submodule_source = Some(context.clone());
+                                context.checkout_path = entry.path.clone();
+                                context.prepare();
+                            }
+                        }
                         Ok(WorktreeReadData {
+                            prepared_submodule_source,
+                            submodule_context,
                             source_checkout_path: source.source_checkout_path,
                             source_repo_root: source.source_repo_root,
                             repo_key: source.repo_key,
@@ -214,6 +271,7 @@ impl App {
                     .map_err(|err| (err.code.to_string(), err.message));
                 let _ = event_tx.blocking_send(AppEvent::WorktreeReadFinished(Box::new(
                     WorktreeReadResult {
+                        _submodule_write_permit: submodule_write_permit,
                         _permit: permit,
                         request,
                         client_local,
@@ -238,6 +296,8 @@ impl App {
             Err((code, message)) => encode_error(result.request.id, &code, message),
             Ok(data) => {
                 let mut source = WorktreeSource {
+                    prepared_submodule_source: data.prepared_submodule_source,
+                    submodule_context: data.submodule_context,
                     workspace_idx: None,
                     source_checkout_path: data.source_checkout_path,
                     source_repo_root: data.source_repo_root,
@@ -307,6 +367,8 @@ fn worktree_source_from_space(
         space.repo_root.clone()
     };
     WorktreeSource {
+        prepared_submodule_source: None,
+        submodule_context: None,
         workspace_idx: None,
         source_checkout_path: source_checkout_path.clone(),
         source_repo_root: source_checkout_path,

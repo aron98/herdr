@@ -5,7 +5,7 @@ impl ClientContextMenuOverlay {
         use ClientContextMenuAction as Action;
 
         let item = |label, action| ClientContextMenuItem { label, action };
-        match &self.target {
+        let mut items = match &self.target {
             ClientContextMenuTarget::Workspace { is_git: false, .. } => {
                 vec![item("Rename", Action::Rename), item("Close", Action::Close)]
             }
@@ -79,7 +79,42 @@ impl ClientContextMenuOverlay {
                 ]);
                 items
             }
+        };
+        if let ClientContextMenuTarget::Workspace {
+            submodule_available,
+            context_sharing,
+            relationship_group,
+            collapsed,
+            ..
+        } = &self.target
+        {
+            if relationship_group.is_some()
+                && !items.iter().any(|item| item.action == Action::ToggleGroup)
+            {
+                items.push(item(
+                    if *collapsed { "Expand" } else { "Collapse" },
+                    Action::ToggleGroup,
+                ));
+            }
+            if *submodule_available {
+                items.push(item("Open submodule...", Action::OpenSubmodule));
+            }
+            if let Some(enabled) = context_sharing {
+                items.push(item(
+                    "Refresh parent skills",
+                    Action::RefreshSubmoduleContext,
+                ));
+                items.push(item(
+                    if *enabled {
+                        "Disable parent skills"
+                    } else {
+                        "Enable parent skills"
+                    },
+                    Action::ToggleSubmoduleContext,
+                ));
+            }
         }
+        items
     }
 }
 
@@ -104,14 +139,63 @@ impl ClientShellState {
                     })
                 })
         });
-        let close_group = super::sidebar::workspace_close_is_group(snapshot, workspace);
-        let collapsed = worktree.is_some_and(|worktree| {
-            self.group_is_collapsed(&self.active_endpoint_id, &worktree.key)
-        });
+        let close_group = !self.is_submodule_parent(&workspace_id)
+            && super::sidebar::workspace_close_is_group(snapshot, workspace);
+        let relationship_group = snapshot
+            .workspaces
+            .iter()
+            .position(|ws| ws.workspace_id == workspace_id)
+            .and_then(|index| {
+                self.hierarchy_for_endpoint(&self.active_endpoint_id)
+                    .group_key(index)
+            })
+            .map(str::to_owned);
+        let collapsed = relationship_group
+            .as_deref()
+            .or_else(|| worktree.map(|worktree| worktree.key.as_str()))
+            .is_some_and(|key| self.group_is_collapsed(&self.active_endpoint_id, key));
         self.overlay = Some(ClientShellOverlay::ContextMenu(ClientContextMenuOverlay {
             target: ClientContextMenuTarget::Workspace {
-                workspace_id,
+                workspace_id: workspace_id.clone(),
                 is_git: worktree.is_some() || workspace.branch.is_some(),
+                submodule_available: self
+                    .endpoints
+                    .iter()
+                    .find(|endpoint| endpoint.endpoint_id == self.active_endpoint_id)
+                    .and_then(|endpoint| endpoint.methods.as_ref())
+                    .is_some_and(|methods| {
+                        methods.contains("submodule.list") && methods.contains("submodule.open")
+                    }),
+                relationship_group,
+                context_sharing: self
+                    .endpoints
+                    .iter()
+                    .find(|endpoint| endpoint.endpoint_id == self.active_endpoint_id)
+                    .and_then(|endpoint| endpoint.methods.as_ref())
+                    .is_some_and(|methods| methods.contains("submodule.context.refresh"))
+                    .then(|| {
+                        self.submodule_context(&workspace_id)
+                            .map(|context| context.sharing_enabled)
+                    })
+                    .flatten(),
+                context_status: self
+                    .endpoints
+                    .iter()
+                    .find(|endpoint| endpoint.endpoint_id == self.active_endpoint_id)
+                    .and_then(|endpoint| endpoint.submodules.error.clone())
+                    .or_else(|| {
+                        self.submodule_context(&workspace_id).map(|context| {
+                            format!(
+                                "Parent skills: {}{}",
+                                context.status,
+                                if context.messages.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!(" — {}", context.messages.join("; "))
+                                }
+                            )
+                        })
+                    }),
                 is_linked_worktree: worktree.is_some_and(|worktree| worktree.is_linked_worktree),
                 has_worktree_children,
                 close_group,
@@ -257,18 +341,43 @@ impl ClientShellState {
             ClientContextMenuAction::OpenWorktree => {
                 self.begin_worktree_action_for(KeybindAction::OpenWorktree, workspace_id, outcome)
             }
+            ClientContextMenuAction::OpenSubmodule => {
+                self.begin_submodule_open(workspace_id, outcome)
+            }
+            ClientContextMenuAction::RefreshSubmoduleContext => {
+                self.refresh_submodule_context(workspace_id, false, outcome)
+            }
+            ClientContextMenuAction::ToggleSubmoduleContext => {
+                self.refresh_submodule_context(workspace_id, true, outcome)
+            }
             ClientContextMenuAction::RemoveWorktree => {
                 self.begin_worktree_action_for(KeybindAction::RemoveWorktree, workspace_id, outcome)
             }
             ClientContextMenuAction::ToggleGroup => {
-                let key = self.snapshot.as_deref().and_then(|snapshot| {
-                    snapshot
-                        .workspaces
-                        .iter()
-                        .find(|workspace| workspace.workspace_id == workspace_id)
-                        .and_then(|workspace| workspace.worktree.as_ref())
-                        .map(|worktree| worktree.key.clone())
-                });
+                let key = self
+                    .snapshot
+                    .as_deref()
+                    .and_then(|snapshot| {
+                        snapshot
+                            .workspaces
+                            .iter()
+                            .position(|ws| ws.workspace_id == workspace_id)
+                    })
+                    .and_then(|index| {
+                        self.hierarchy_for_endpoint(&self.active_endpoint_id)
+                            .group_key(index)
+                    })
+                    .map(str::to_owned)
+                    .or_else(|| {
+                        self.snapshot.as_deref().and_then(|snapshot| {
+                            snapshot
+                                .workspaces
+                                .iter()
+                                .find(|workspace| workspace.workspace_id == workspace_id)
+                                .and_then(|workspace| workspace.worktree.as_ref())
+                                .map(|worktree| worktree.key.clone())
+                        })
+                    });
                 if let Some(key) = key {
                     let endpoint_id = self.active_endpoint_id.clone();
                     self.toggle_collapsed_group(&endpoint_id, key);

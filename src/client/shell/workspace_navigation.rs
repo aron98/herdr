@@ -114,6 +114,8 @@ impl ClientShellState {
                     .iter()
                     .enumerate()
                     .map(|(index, _)| WorkspaceEntry {
+                        depth: 0,
+                        submodule: false,
                         index,
                         indented: false,
                         last_child: false,
@@ -126,7 +128,10 @@ impl ClientShellState {
                     self.collapsed_groups_for_endpoint(&endpoint.endpoint_id)
                         .unwrap_or(&empty_collapsed_groups)
                 };
-                render::workspace_entries(snapshot, collapsed_groups)
+                endpoint
+                    .submodules
+                    .hierarchy
+                    .entries(snapshot, collapsed_groups)
             };
             for entry in entries {
                 targets.push(WorkspaceNavigationTarget {

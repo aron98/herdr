@@ -181,6 +181,34 @@ worktree は、Git チェックアウトの出自情報を持つ通常の Herdr 
 
 Git はデフォルトで、別のユーザーが所有するリポジトリを拒否します。リポジトリを別途確認済みの場合は `--trust-repository` を渡すと、解決されたパスをそのコマンドでのみ信頼します。Herdr は Git 設定を変更しません。
 
+## サブモジュール
+
+```bash
+herdr submodule list [--workspace ID | --cwd PATH]
+herdr submodule open PATH [--workspace ID | --cwd PATH] [--focus] [--no-share-skills]
+herdr submodule contexts
+herdr submodule context WORKSPACE_ID [--enable | --disable] [--codex-source PATH] [--claude-source PATH] [--clear-sources]
+```
+
+`open` の `PATH` は親チェックアウトを基準とする登録済みサブモジュールのパスです。
+事前に Git で初期化してください。Herdr はワークスペースを開き、親との関連を保存します。
+リポジトリのクローンや、親が記録するサブモジュールのコミット更新は行いません。
+サブモジュールのワークスペースで通常の `worktree create` と `worktree open` を使うと、
+親ディレクトリの外にある worktree でも親との関連を維持できます。
+
+`--no-share-skills` を指定しない限り、親の `.agents/skills` を子の `.agents/skills` と
+`.claude/skills` にリンクします。Claude Code では親の `.claude/skills` が優先されます。
+直接実行する `claude`・`codex` と `herdr agent start` の両方で利用できます。
+子に既存のスキルがある場合は保持し、競合を `submodule contexts` に表示します。
+リンク先は親の実ファイルなので、継承したスキルを編集すると親のファイルが変わります。
+親の指示ファイル、フック、エージェント設定は統合しません。
+
+親のスキルを追加・削除した後は `submodule context WORKSPACE_ID` で更新します。
+追加の読み込み先は `--codex-source`・`--claude-source` を繰り返して指定でき、相対パスは
+親チェックアウトから解決します。省略したリストは保持し、`--clear-sources` は両方の
+追加リストを消去します。`--disable` は Herdr 所有のリンクだけを削除します。
+リンクは Herdr 終了後も残り、Git のローカル除外設定によって通常の変更一覧から除外されます。
+
 ## タブ
 
 ```bash

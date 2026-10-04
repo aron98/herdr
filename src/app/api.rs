@@ -9,6 +9,7 @@ mod panes;
 pub(crate) mod plugins;
 pub(super) mod responses;
 mod session;
+mod submodules;
 mod tabs;
 mod workspaces;
 mod worktrees;
@@ -161,6 +162,11 @@ impl App {
                     crate::api::schema::PluginCommandStatus::Failed
                 };
             }
+            return Vec::new();
+        }
+
+        if let AppEvent::SubmoduleFinished(result) = ev {
+            self.handle_api_submodule_finished(*result);
             return Vec::new();
         }
 
@@ -1053,6 +1059,16 @@ impl App {
             }
             Method::WorkspaceClose(target) => {
                 return self.handle_workspace_close(request.id, target);
+            }
+            Method::SubmoduleContexts(_) => return self.handle_submodule_contexts(request.id),
+            Method::SubmoduleList(_)
+            | Method::SubmoduleOpen(_)
+            | Method::SubmoduleContextRefresh(_) => {
+                return responses::encode_error(
+                    request.id,
+                    "invalid_request",
+                    "submodule operations require the asynchronous runtime",
+                );
             }
             Method::WorktreeList(_) | Method::WorktreeOpen(_) => {
                 return responses::encode_error(

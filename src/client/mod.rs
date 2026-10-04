@@ -652,6 +652,30 @@ async fn run_client_loop(
     #[cfg(windows)]
     let mut stdin_open = true;
     while !should_quit.load(Ordering::Acquire) {
+        let metadata_actions = state
+            .shell
+            .as_mut()
+            .map(|shell| shell.take_submodule_metadata_actions())
+            .unwrap_or_default();
+        if !metadata_actions.is_empty() {
+            let (_, repaint) = dispatch_client_shell_actions(
+                metadata_actions,
+                &mut endpoint_commands,
+                &mut write_stream,
+                state.shell.as_mut(),
+                &mut state.detached_process_children,
+                &mut scheduled_activation,
+            )?;
+            if repaint {
+                if let Some(frame) = state
+                    .shell
+                    .as_mut()
+                    .and_then(|shell| shell.compose(state.reported_size.0, state.reported_size.1))
+                {
+                    state.present_frame(frame);
+                }
+            }
+        }
         if pending_activation.is_none() {
             if let Some(reload) = pending_catalog.take() {
                 match reload {
@@ -1872,7 +1896,9 @@ async fn run_client_loop(
                             || (false, Vec::new()),
                             |shell| {
                                 if completed.generation == generation
-                                    && shell.endpoint_is_active(&completed.endpoint_id)
+                                    && (shell.endpoint_is_active(&completed.endpoint_id)
+                                        || shell
+                                            .is_submodule_metadata_request(&completed.request_id))
                                 {
                                     shell.handle_endpoint_result(
                                         &completed.boot_id,
@@ -2265,7 +2291,9 @@ async fn run_client_loop(
                         let shell = state.shell.as_mut().expect("checked shell mode");
                         let mut outcome = shell.tick_selection_autoscroll(now);
                         for expired in expired_endpoints {
-                            if !shell.endpoint_is_active(&expired.endpoint_id) {
+                            if !shell.endpoint_is_active(&expired.endpoint_id)
+                                && !shell.is_submodule_metadata_request(&expired.request_id)
+                            {
                                 continue;
                             }
                             let (repaint, actions) = shell.handle_endpoint_result(

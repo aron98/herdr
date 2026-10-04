@@ -119,7 +119,11 @@ pub(super) fn render_worktree_open_overlay(
         inner.x,
         inner.y,
         inner.width,
-        "open worktree",
+        if open.submodules {
+            "open submodule"
+        } else {
+            "open worktree"
+        },
         Style::default()
             .fg(p.text)
             .bg(p.panel_bg)
@@ -137,7 +141,12 @@ pub(super) fn render_worktree_open_overlay(
         } else if !open.query.is_empty() {
             format!(" / {}", open.query)
         } else {
-            " / filter worktrees".to_owned()
+            if open.submodules {
+                " / filter submodules"
+            } else {
+                " / filter worktrees"
+            }
+            .to_owned()
         },
         Style::default()
             .fg(if open.search_focused {
@@ -213,6 +222,11 @@ pub(super) fn render_worktree_open_overlay(
         } else {
             Style::default().fg(p.text).bg(p.panel_bg)
         };
+        let style = if !entry.initialized {
+            style.add_modifier(Modifier::DIM)
+        } else {
+            style
+        };
         b.set_style(rect, style);
         put_text(
             b,
@@ -222,7 +236,11 @@ pub(super) fn render_worktree_open_overlay(
             &format!(" {}", entry.label),
             style.add_modifier(Modifier::BOLD),
         );
-        let status = entry.status_label();
+        let status = if open.submodules && entry.initialized {
+            "ready"
+        } else {
+            entry.status_label()
+        };
         if !status.is_empty() {
             put_right_text(b, rect, rect.y, status, style);
         }
@@ -245,7 +263,11 @@ pub(super) fn render_worktree_open_overlay(
             body.x,
             body.y,
             body.width,
-            " no matching worktrees",
+            if open.submodules {
+                " no matching submodules"
+            } else {
+                " no matching worktrees"
+            },
             Style::default().fg(p.overlay0).bg(p.panel_bg),
         );
     }
@@ -272,14 +294,23 @@ pub(super) fn render_worktree_open_overlay(
     let [primary, cancel] = buttons.as_slice() else {
         return None;
     };
+    let can_open = !open.opening
+        && open
+            .selected_entry_index()
+            .and_then(|index| open.entries.get(index))
+            .is_some_and(|entry| entry.initialized);
     button(
         b,
         *primary,
         " ↵ open ",
-        Style::default()
-            .fg(contrast(p))
-            .bg(p.accent)
-            .add_modifier(Modifier::BOLD),
+        if can_open {
+            Style::default()
+                .fg(contrast(p))
+                .bg(p.accent)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(p.overlay0).bg(p.surface0)
+        },
     );
     button(
         b,

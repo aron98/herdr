@@ -55,6 +55,19 @@ impl HeadlessServer {
             );
             return changed;
         }
+        if matches!(&request.method, api::schema::Method::SubmoduleContexts(_)) {
+            self.send_to_client(
+                client_id,
+                crate::server::client_commands::success_message_with_result(
+                    boot_id,
+                    request_id,
+                    api::schema::ResponseResult::SubmoduleContexts {
+                        contexts: self.app.submodule_contexts(),
+                    },
+                ),
+            );
+            return false;
+        }
         if client.shell_endpoint_command_in_flight {
             let message = crate::server::client_commands::error_message(
                 boot_id,
@@ -105,12 +118,16 @@ impl HeadlessServer {
             client.shell_endpoint_command_surface_revision = Some(client.shell_projection_revision);
             let deferred_worktree = matches!(
                 &request.method,
-                api::schema::Method::WorktreeCreate(_)
+                api::schema::Method::SubmoduleOpen(_)
+                    | api::schema::Method::SubmoduleList(_)
+                    | api::schema::Method::SubmoduleContextRefresh(_)
+                    | api::schema::Method::WorktreeCreate(_)
                     | api::schema::Method::WorktreeRemove(_)
                     | api::schema::Method::WorktreeList(_)
                     | api::schema::Method::WorktreeOpen(_)
             );
             let deferred_navigation = match &request.method {
+                api::schema::Method::SubmoduleOpen(params) => params.focus,
                 api::schema::Method::WorktreeCreate(params) => params.focus,
                 api::schema::Method::WorktreeOpen(params) => params.focus,
                 _ => false,

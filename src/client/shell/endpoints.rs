@@ -10,6 +10,7 @@ pub(crate) struct ClientEndpointAgentViewProjection {
 
 #[derive(Clone, Debug)]
 pub(crate) struct ClientShellEndpoint {
+    pub(super) submodules: super::submodules::SubmoduleMetadata,
     pub(crate) endpoint_id: ClientEndpointId,
     pub(crate) label: String,
     pub(crate) status: ClientEndpointStatus,
@@ -63,6 +64,9 @@ impl ClientShellState {
                     profile.enabled && endpoint.status != ClientEndpointStatus::Disabled
                 });
             next.push(ClientShellEndpoint {
+                submodules: previous
+                    .map(|endpoint| endpoint.submodules.clone())
+                    .unwrap_or_default(),
                 endpoint_id,
                 label: profile.label.clone(),
                 status: previous.map_or(
@@ -128,6 +132,7 @@ impl ClientShellState {
             endpoint.snapshot = None;
             endpoint.snapshot_generation = None;
             endpoint.methods = None;
+            endpoint.submodules = Default::default();
             endpoint.agent_recency.clear();
             endpoint.agent_presentation = Default::default();
             endpoint.agent_view_projection = None;
@@ -201,6 +206,12 @@ impl ClientShellState {
             .iter_mut()
             .find(|endpoint| &endpoint.endpoint_id == endpoint_id)
         {
+            if !methods
+                .as_ref()
+                .is_some_and(|methods| methods.contains("submodule.contexts"))
+            {
+                endpoint.submodules = Default::default();
+            }
             endpoint.methods = methods;
         }
     }
@@ -620,6 +631,30 @@ impl ClientShellState {
         });
         let endpoint = &mut self.endpoints[index];
         endpoint.agent_recency = recency;
+        if endpoint.snapshot_generation != generation
+            || endpoint
+                .snapshot
+                .as_deref()
+                .is_some_and(|previous| previous.boot_id != snapshot.boot_id)
+        {
+            endpoint.submodules = Default::default();
+        }
+        if endpoint.snapshot.as_deref().is_none_or(|previous| {
+            !previous
+                .workspaces
+                .iter()
+                .map(|ws| (&ws.workspace_id, &ws.worktree))
+                .eq(snapshot
+                    .workspaces
+                    .iter()
+                    .map(|ws| (&ws.workspace_id, &ws.worktree)))
+        }) {
+            endpoint.submodules.hierarchy = super::hierarchy::WorkspaceHierarchy::build(
+                &snapshot,
+                &endpoint.submodules.contexts,
+            );
+        }
+        endpoint.submodules.hierarchy.update_status(&snapshot);
         endpoint.snapshot_generation = generation;
         endpoint.snapshot = Some(snapshot);
         let pending_matches =
@@ -671,6 +706,10 @@ impl ClientShellState {
                 .acknowledge_surface(snapshot, surface, self.outer_focused)
         };
         if changed {
+            let endpoint = &mut self.endpoints[index];
+            if let Some(snapshot) = endpoint.snapshot.as_deref() {
+                endpoint.submodules.hierarchy.update_status(snapshot);
+            }
             self.snapshot = self.endpoints[index].snapshot.clone();
         }
         changed
@@ -731,6 +770,7 @@ pub(super) fn endpoint_status_presentation(
 
 pub(super) fn local_endpoint() -> ClientShellEndpoint {
     ClientShellEndpoint {
+        submodules: Default::default(),
         endpoint_id: ClientEndpointId::Local,
         label: "Local".into(),
         status: ClientEndpointStatus::Online,

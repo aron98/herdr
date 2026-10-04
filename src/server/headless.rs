@@ -2533,7 +2533,7 @@ impl HeadlessServer {
                 }
                 let deferred_tab_id = completed_deferred_response
                     .as_deref()
-                    .and_then(Self::deferred_endpoint_navigation_tab_id);
+                    .and_then(|response| self.deferred_endpoint_navigation_tab_id(response));
                 let focus_before = self.shell_focus_target(client_id);
                 let focused_tabs_before = self.focused_shell_tabs();
                 let navigation_changed = self.clients.get(&client_id).is_some_and(|client| {
@@ -2962,6 +2962,16 @@ impl HeadlessServer {
                 .app
                 .handle_deferred_agent_api_request(msg.request, msg.respond_to);
             return changed | deferred_changed;
+        }
+        if matches!(
+            &msg.request.method,
+            api::schema::Method::SubmoduleList(_)
+                | api::schema::Method::SubmoduleOpen(_)
+                | api::schema::Method::SubmoduleContextRefresh(_)
+        ) {
+            self.app
+                .start_submodule_request(msg.request, msg.respond_to, client_local);
+            return changed;
         }
         if matches!(
             &msg.request.method,

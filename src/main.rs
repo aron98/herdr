@@ -51,7 +51,9 @@ mod render_signal;
 mod selection;
 mod server;
 mod session;
+mod skill_sharing;
 mod sound;
+mod submodule;
 mod terminal;
 mod terminal_effects;
 mod terminal_modes;
@@ -619,6 +621,7 @@ fn main() -> io::Result<()> {
         println!("       herdr channel <subcommand> ...");
         println!("       herdr workspace <subcommand> ...");
         println!("       herdr worktree <subcommand> ...");
+        println!("       herdr submodule <subcommand> ...");
         println!("       herdr tab <subcommand> ...");
         println!("       herdr notification <subcommand> ...");
         println!("       herdr agent <subcommand> ...");
@@ -669,6 +672,10 @@ fn main() -> io::Result<()> {
                 "Git worktree helpers over the socket API",
             ),
             ("herdr tab <subcommand>", "Tab helpers over the socket API"),
+            (
+                "herdr submodule <subcommand>",
+                "Submodule workspaces and parent skills",
+            ),
             (
                 "herdr notification <subcommand>",
                 "Notification helpers over the socket API",
@@ -767,6 +774,7 @@ fn main() -> io::Result<()> {
                 "machine",
                 "workspace",
                 "worktree",
+                "submodule",
                 "pane",
                 "session",
                 "integration",

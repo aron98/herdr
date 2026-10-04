@@ -3900,6 +3900,96 @@
           ],
           "type": "string"
         },
+        "SubmoduleContextParams": {
+          "properties": {
+            "claude_sources": {
+              "default": null,
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "codex_sources": {
+              "default": null,
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "enabled": {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "workspace_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "workspace_id"
+          ],
+          "type": "object"
+        },
+        "SubmoduleListParams": {
+          "properties": {
+            "cwd": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "workspace_id": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "SubmoduleOpenParams": {
+          "properties": {
+            "cwd": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "focus": {
+              "default": false,
+              "type": "boolean"
+            },
+            "path": {
+              "type": "string"
+            },
+            "share_skills": {
+              "default": true,
+              "type": "boolean"
+            },
+            "workspace_id": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        },
         "Subscription": {
           "oneOf": [
             {
@@ -5057,6 +5147,70 @@
             },
             "params": {
               "$ref": "#/schemas/request/$defs/WorkspaceCloseParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "submodule.list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/SubmoduleListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "submodule.open",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/SubmoduleOpenParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "submodule.contexts",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "submodule.context.refresh",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/SubmoduleContextParams"
             }
           },
           "required": [
@@ -9277,6 +9431,80 @@
             },
             {
               "properties": {
+                "parent_path": {
+                  "type": "string"
+                },
+                "submodules": {
+                  "items": {
+                    "$ref": "#/schemas/success_response/$defs/SubmoduleInfo"
+                  },
+                  "type": "array"
+                },
+                "type": {
+                  "const": "submodule_list",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "parent_path",
+                "submodules"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "submodule_opened",
+                  "type": "string"
+                },
+                "workspace_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "workspace_id"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "contexts": {
+                  "items": {
+                    "$ref": "#/schemas/success_response/$defs/SubmoduleContextInfo"
+                  },
+                  "type": "array"
+                },
+                "type": {
+                  "const": "submodule_contexts",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "contexts"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "context": {
+                  "$ref": "#/schemas/success_response/$defs/SubmoduleContextInfo"
+                },
+                "type": {
+                  "const": "submodule_context",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "context"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
                 "source": {
                   "$ref": "#/schemas/success_response/$defs/WorktreeSourceInfo"
                 },
@@ -10533,6 +10761,73 @@
             "down"
           ],
           "type": "string"
+        },
+        "SubmoduleContextInfo": {
+          "properties": {
+            "checkout_path": {
+              "type": "string"
+            },
+            "messages": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "parent_path": {
+              "type": "string"
+            },
+            "parent_workspace_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "repo_key": {
+              "type": "string"
+            },
+            "sharing_enabled": {
+              "type": "boolean"
+            },
+            "status": {
+              "type": "string"
+            },
+            "submodule_path": {
+              "type": "string"
+            },
+            "workspace_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "workspace_id",
+            "parent_path",
+            "submodule_path",
+            "checkout_path",
+            "repo_key",
+            "sharing_enabled",
+            "status",
+            "messages"
+          ],
+          "type": "object"
+        },
+        "SubmoduleInfo": {
+          "properties": {
+            "checkout_path": {
+              "type": "string"
+            },
+            "initialized": {
+              "type": "boolean"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "checkout_path",
+            "initialized"
+          ],
+          "type": "object"
         },
         "TabInfo": {
           "properties": {

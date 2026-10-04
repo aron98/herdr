@@ -9,6 +9,7 @@ pub(super) struct CachedEndpointSnapshot<'a> {
     pub(super) endpoint_id: &'a ClientEndpointId,
     pub(super) label: &'a str,
     pub(super) status: ClientEndpointStatus,
+    pub(super) hierarchy: &'a super::hierarchy::WorkspaceHierarchy,
     pub(super) snapshot: &'a ClientShellSnapshot,
     pub(super) agent_recency: &'a HashMap<String, u64>,
     pub(super) agent_presentation: &'a super::endpoint_agent_state::EndpointAgentPresentation,
@@ -36,6 +37,7 @@ pub(super) fn cached_endpoint_snapshots(
                     label: &endpoint.label,
                     status: endpoint.status,
                     snapshot,
+                    hierarchy: &endpoint.submodules.hierarchy,
                     agent_recency: &endpoint.agent_recency,
                     agent_presentation: &endpoint.agent_presentation,
                 })

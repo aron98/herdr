@@ -11,6 +11,10 @@ use crate::workspace::{GitStatusCacheEntry, WorkspaceGitStatus};
 
 #[derive(Debug)]
 pub struct ApiWorktreeAddRequest {
+    pub(crate) _submodule_write_permit: Option<crate::submodule::PreparationPermit>,
+    pub(crate) prepared_submodule_source: Option<crate::submodule::Association>,
+    pub(crate) _submodule_permit: Option<tokio::sync::OwnedSemaphorePermit>,
+    pub(crate) submodule_context: Option<crate::submodule::Association>,
     pub id: String,
     pub operation_id: u64,
     pub checkout_key: std::path::PathBuf,
@@ -54,6 +58,7 @@ pub struct WorktreeRemoveResult {
 
 #[derive(Debug)]
 pub struct WorktreeReadResult {
+    pub(crate) _submodule_write_permit: Option<crate::submodule::PreparationPermit>,
     // Keep the slot until completion is consumed, including time queued on the app loop.
     pub(crate) _permit: tokio::sync::OwnedSemaphorePermit,
     pub(crate) client_local: bool,
@@ -66,6 +71,8 @@ pub struct WorktreeReadResult {
 
 #[derive(Debug)]
 pub(crate) struct WorktreeReadData {
+    pub prepared_submodule_source: Option<crate::submodule::Association>,
+    pub submodule_context: Option<crate::submodule::Association>,
     pub source_checkout_path: std::path::PathBuf,
     pub source_repo_root: std::path::PathBuf,
     pub repo_key: String,
@@ -82,7 +89,10 @@ pub enum AppEvent {
         exit_reason: crate::platform::ChildExitReason,
     },
     /// A worktree-removal runtime could not be restored normally.
-    WorktreeRuntimeRestoreFailed { pane_id: PaneId, operation_id: u64 },
+    WorktreeRuntimeRestoreFailed {
+        pane_id: PaneId,
+        operation_id: u64,
+    },
     /// Process detection identified an agent before its screen state was confirmed.
     AgentProcessDetected {
         pane_id: PaneId,
@@ -90,7 +100,10 @@ pub enum AppEvent {
         observed_at: Instant,
     },
     /// The current Codex input screen is visible during managed startup.
-    CodexPromptObserved { pane_id: PaneId, ready: bool },
+    CodexPromptObserved {
+        pane_id: PaneId,
+        ready: bool,
+    },
     /// Fallback detector state changed in a pane.
     StateChanged {
         pane_id: PaneId,
@@ -175,10 +188,15 @@ pub enum AppEvent {
     },
     /// A pane child emitted one or more executable BEL characters.
     /// The host-facing process forwards them to its outer terminal.
-    TerminalBell { pane_id: PaneId, count: u16 },
+    TerminalBell {
+        pane_id: PaneId,
+        count: u16,
+    },
     /// A pane child emitted a valid OSC 52 clipboard write. The main loop
     /// re-emits it through herdr's own clipboard writer.
-    ClipboardWrite { content: Vec<u8> },
+    ClipboardWrite {
+        content: Vec<u8>,
+    },
     /// A pane child reported its shell current directory through terminal
     /// metadata such as OSC 7.
     TerminalCwdReported {
@@ -211,4 +229,5 @@ pub enum AppEvent {
     WorktreeRemoveFinished(Box<WorktreeRemoveResult>),
     /// Background worktree discovery completed for an API list/open request.
     WorktreeReadFinished(Box<WorktreeReadResult>),
+    SubmoduleFinished(Box<crate::submodule::OperationResult>),
 }

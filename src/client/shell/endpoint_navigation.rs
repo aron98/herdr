@@ -12,7 +12,8 @@ impl ClientShellState {
     }
 
     pub(super) fn endpoint_workspace_is_draggable(&self, press: &ClientWorkspacePress) -> bool {
-        press.endpoint_id == self.active_endpoint_id
+        !self.hierarchy_for_endpoint(&press.endpoint_id).active()
+            && press.endpoint_id == self.active_endpoint_id
             && self
                 .snapshot
                 .as_deref()
@@ -122,7 +123,10 @@ impl ClientShellState {
                         .snapshot
                         .as_deref()
                         .map_or_else(Vec::new, |snapshot| {
-                            render::workspace_entries(snapshot, &HashSet::new())
+                            endpoint
+                                .submodules
+                                .hierarchy
+                                .entries(snapshot, &HashSet::new())
                                 .into_iter()
                                 .filter_map(|entry| {
                                     snapshot.workspaces.get(entry.index).map(|workspace| {

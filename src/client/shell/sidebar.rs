@@ -226,7 +226,15 @@ pub(crate) fn render_sidebar(
             .add_modifier(Modifier::BOLD),
     );
 
-    let entries = workspace_entries(snapshot, state.collapsed_groups);
+    let hierarchy = state
+        .endpoints
+        .iter()
+        .find(|endpoint| &endpoint.endpoint_id == state.active_endpoint_id)
+        .map(|endpoint| &endpoint.submodules.hierarchy);
+    let entries = hierarchy.map_or_else(
+        || workspace_entries(snapshot, state.collapsed_groups),
+        |hierarchy| hierarchy.entries(snapshot, state.collapsed_groups),
+    );
     let body = Rect::new(
         workspace_area.x,
         workspace_area.y.saturating_add(WORKSPACE_HEADER_ROWS),
@@ -245,8 +253,23 @@ pub(crate) fn render_sidebar(
                 .map(|workspace| {
                     workspace_rows(
                         workspace,
-                        displayed_workspace_status(snapshot, workspace, state.collapsed_groups),
-                        entry.indented,
+                        hierarchy.map_or_else(
+                            || {
+                                displayed_workspace_status(
+                                    snapshot,
+                                    workspace,
+                                    state.collapsed_groups,
+                                )
+                            },
+                            |hierarchy| {
+                                hierarchy.displayed_status(
+                                    snapshot,
+                                    entry.index,
+                                    state.collapsed_groups,
+                                )
+                            },
+                        ),
+                        entry.indented && !entry.submodule,
                         &config.spaces,
                     )
                     .len()
@@ -303,8 +326,16 @@ pub(crate) fn render_sidebar(
         let Some(workspace) = snapshot.workspaces.get(entry.index) else {
             continue;
         };
-        let status = displayed_workspace_status(snapshot, workspace, state.collapsed_groups);
-        let rows = workspace_rows(workspace, status, entry.indented, &config.spaces);
+        let status = hierarchy.map_or_else(
+            || displayed_workspace_status(snapshot, workspace, state.collapsed_groups),
+            |hierarchy| hierarchy.displayed_status(snapshot, entry.index, state.collapsed_groups),
+        );
+        let rows = workspace_rows(
+            workspace,
+            status,
+            entry.indented && !entry.submodule,
+            &config.spaces,
+        );
         let row_height = (rows.len().max(1).min(u16::MAX as usize) as u16).min(body.height);
         if y.saturating_add(row_height) > body.bottom() {
             break;
@@ -339,6 +370,7 @@ pub(crate) fn render_sidebar(
             rect,
             snapshot,
             entry.index,
+            hierarchy,
             state.collapsed_groups,
             palette,
         );
@@ -491,6 +523,8 @@ pub(crate) fn workspace_entries(
             .filter(|worktree| grouped.contains(worktree.key.as_str()))
         else {
             entries.push(WorkspaceEntry {
+                depth: 0,
+                submodule: false,
                 index,
                 indented: false,
                 last_child: false,
@@ -510,6 +544,8 @@ pub(crate) fn workspace_entries(
                 .is_some_and(|worktree| !worktree.is_linked_worktree)
         }) {
             entries.push(WorkspaceEntry {
+                depth: 0,
+                submodule: false,
                 index: parent,
                 indented: false,
                 last_child: false,
@@ -525,6 +561,8 @@ pub(crate) fn workspace_entries(
                         .is_some_and(|worktree| worktree.is_linked_worktree)
             }) {
                 entries.push(WorkspaceEntry {
+                    depth: 0,
+                    submodule: false,
                     index: active,
                     indented: true,
                     last_child: true,
@@ -544,6 +582,8 @@ pub(crate) fn workspace_entries(
             .collect::<Vec<_>>();
         for (child_index, child) in children.iter().enumerate() {
             entries.push(WorkspaceEntry {
+                depth: 0,
+                submodule: false,
                 index: *child,
                 indented: true,
                 last_child: child_index + 1 == children.len(),
@@ -605,10 +645,15 @@ pub(in crate::client::shell) fn render_parent_group_toggle(
     workspace_rect: Rect,
     snapshot: &ClientShellSnapshot,
     workspace_index: usize,
+    hierarchy: Option<&super::super::hierarchy::WorkspaceHierarchy>,
     collapsed_groups: &HashSet<String>,
     palette: &Palette,
 ) -> Option<(Rect, String)> {
-    let key = parent_group_key(snapshot, workspace_index)?;
+    let key = if let Some(hierarchy) = hierarchy.filter(|hierarchy| hierarchy.active()) {
+        hierarchy.group_key(workspace_index)?.to_owned()
+    } else {
+        parent_group_key(snapshot, workspace_index)?
+    };
     let toggle = Rect::new(
         workspace_rect.right().saturating_sub(1),
         workspace_rect.y,
@@ -707,7 +752,12 @@ pub(in crate::client::shell) fn render_workspace_rows(
         if y >= area.bottom() {
             break;
         }
-        let mut x = area.x;
+        let mut x = area
+            .x
+            .saturating_add(
+                u16::try_from(entry.depth.saturating_sub(1).saturating_mul(3)).unwrap_or(u16::MAX),
+            )
+            .min(area.right());
         if entry.indented {
             let prefix = if row_index == 0 {
                 if entry.last_child {
@@ -732,6 +782,16 @@ pub(in crate::client::shell) fn render_workspace_rows(
             x = x.saturating_add(1);
         } else {
             x = x.saturating_add(3);
+        }
+        if entry.submodule && row_index == 0 {
+            x = put_segment(
+                buffer,
+                x,
+                y,
+                area.right(),
+                "◇ ",
+                Style::default().fg(palette.accent),
+            );
         }
         let highlighted = focused || dragged;
         let workspace_style = Style::default()
